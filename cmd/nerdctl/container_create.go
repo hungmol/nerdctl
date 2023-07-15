@@ -24,6 +24,7 @@ import (
 	"github.com/containerd/nerdctl/pkg/clientutil"
 	"github.com/containerd/nerdctl/pkg/cmd/container"
 	"github.com/containerd/nerdctl/pkg/containerutil"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -404,27 +405,31 @@ func processContainerCreateOptions(cmd *cobra.Command) (opt types.ContainerCreat
 }
 
 func createAction(cmd *cobra.Command, args []string) error {
+
 	createOpt, err := processContainerCreateOptions(cmd)
 	if err != nil {
+		logrus.Errorf("ProcessContainer err: %s", err.Error())
 		return err
 	}
-
 	if (createOpt.Platform == "windows" || createOpt.Platform == "freebsd") && !createOpt.GOptions.Experimental {
 		return fmt.Errorf("%s requires experimental mode to be enabled", createOpt.Platform)
 	}
 	client, ctx, cancel, err := clientutil.NewClientWithPlatform(cmd.Context(), createOpt.GOptions.Namespace, createOpt.GOptions.Address, createOpt.Platform)
 	if err != nil {
+		logrus.Errorf("NewClientWithPlatform err: %s", err.Error())
 		return err
 	}
 	defer cancel()
 
 	netFlags, err := loadNetworkFlags(cmd)
 	if err != nil {
+		logrus.Errorf("loadNetworkFlags err: %s", err.Error())
 		return fmt.Errorf("failed to load networking flags: %s", err)
 	}
 
 	netManager, err := containerutil.NewNetworkingOptionsManager(createOpt.GOptions, netFlags)
 	if err != nil {
+		logrus.Errorf("NewNetworkingOptionsManager err: %s", err.Error())
 		return err
 	}
 
@@ -433,6 +438,7 @@ func createAction(cmd *cobra.Command, args []string) error {
 		if gc != nil {
 			gc()
 		}
+		logrus.Errorf("container.Create err: %s", err.Error())
 		return err
 	}
 	// defer setting `nerdctl/error` label in case of error

@@ -28,10 +28,10 @@ import (
 	"github.com/containerd/nerdctl/pkg/config"
 	ncdefaults "github.com/containerd/nerdctl/pkg/defaults"
 	"github.com/containerd/nerdctl/pkg/errutil"
-	"github.com/containerd/nerdctl/pkg/logging"
 	"github.com/containerd/nerdctl/pkg/rootlessutil"
 	"github.com/containerd/nerdctl/pkg/version"
 	"github.com/fatih/color"
+	"github.com/moby/term"
 	"github.com/pelletier/go-toml"
 
 	"github.com/sirupsen/logrus"
@@ -123,18 +123,40 @@ func main() {
 }
 
 func xmain() error {
-	if len(os.Args) == 3 && os.Args[1] == logging.MagicArgv1 {
-		// containerd runtime v2 logging plugin mode.
-		// "binary://BIN?KEY=VALUE" URI is parsed into Args {BIN, KEY, VALUE}.
-		return logging.Main(os.Args[2])
+	// Set terminal emulation based on platform as required.
+	_, stdout, stderr := term.StdStreams()
+
+	initLogging(stdout, stderr)
+
+	onError := func(err error) {
+		fmt.Fprintf(stderr, "%s\n", err)
+		os.Exit(1)
 	}
-	// nerdctl CLI mode
-	app, err := newApp()
+
+	cmd, err := newDaemonCommand()
 	if err != nil {
-		return err
+		onError(err)
 	}
-	return app.Execute()
+	cmd.SetOut(stdout)
+	if err := cmd.Execute(); err != nil {
+		onError(err)
+	}
+	return nil
 }
+
+// func xmain() error {
+// 	if len(os.Args) == 3 && os.Args[1] == logging.MagicArgv1 {
+// 		// containerd runtime v2 logging plugin mode.
+// 		// "binary://BIN?KEY=VALUE" URI is parsed into Args {BIN, KEY, VALUE}.
+// 		return logging.Main(os.Args[2])
+// 	}
+// 	// nerdctl CLI mode
+// 	app, err := newApp()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return app.Execute()
+// }
 
 func initRootCmdFlags(rootCmd *cobra.Command, tomlPath string) (*pflag.FlagSet, error) {
 	cfg := config.New()
@@ -186,10 +208,7 @@ func newApp() (*cobra.Command, error) {
 	}
 
 	short := "nerdctl is a command line interface for containerd"
-	long := fmt.Sprintf(`%s
-
-Config file ($NERDCTL_TOML): %s
-`, short, tomlPath)
+	long := fmt.Sprintf(`%sConfig file ($NERDCTL_TOML): %s`, short, tomlPath)
 	var rootCmd = &cobra.Command{
 		Use:              "nerdctl",
 		Short:            short,
